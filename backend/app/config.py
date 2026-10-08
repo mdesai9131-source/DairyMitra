@@ -21,10 +21,36 @@ class Config:
     if not db_url or db_url == 'sqlite:///dairymitra.db':
         db_path = os.path.join(basedir, '..', 'dairymitra.db')
         db_url = f'sqlite:///{os.path.abspath(db_path)}'
-    elif db_url.startswith('postgres://'):
-        # Fix for some PaaS providing postgres:// instead of postgresql://
-        db_url = db_url.replace('postgres://', 'postgresql://', 1)
-        
+    else:
+        if db_url.startswith('postgres://'):
+            # Fix for PaaS (Render/Heroku) providing postgres:// instead of postgresql://
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
+        # Smart driver detection: adapt dialect to installed driver
+        has_psycopg = False
+        try:
+            import psycopg  # noqa: F401
+            has_psycopg = True
+        except ImportError:
+            pass
+
+        has_psycopg2 = False
+        try:
+            import psycopg2  # noqa: F401
+            has_psycopg2 = True
+        except ImportError:
+            pass
+
+        if db_url.startswith('postgresql://'):
+            if has_psycopg:
+                db_url = db_url.replace('postgresql://', 'postgresql+psycopg://', 1)
+            elif has_psycopg2:
+                db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+        elif db_url.startswith('postgresql+psycopg://') and not has_psycopg and has_psycopg2:
+            db_url = db_url.replace('postgresql+psycopg://', 'postgresql+psycopg2://', 1)
+        elif db_url.startswith('postgresql+psycopg2://') and not has_psycopg2 and has_psycopg:
+            db_url = db_url.replace('postgresql+psycopg2://', 'postgresql+psycopg://', 1)
+
     SQLALCHEMY_DATABASE_URI = db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
